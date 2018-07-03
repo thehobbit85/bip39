@@ -49,6 +49,7 @@
     DOM.generate = $(".generate");
     DOM.seed = $(".seed");
     DOM.rootKey = $(".root-key");
+    DOM.rootKeyHex = $(".private-key-hex");
     DOM.litecoinLtubContainer = $(".litecoin-ltub-container");
     DOM.litecoinUseLtub = $(".litecoin-use-ltub");
     DOM.extendedPrivKey = $(".extended-priv-key");
@@ -131,6 +132,7 @@
         DOM.generate.on("click", generateClicked);
         DOM.more.on("click", showMore);
         DOM.rootKey.on("input", delayedRootKeyChanged);
+        DOM.rootKeyHex.on("input", delayedPrivateKeyHexChanged);
         DOM.litecoinUseLtub.on("change", litecoinUseLtubChanged);
         DOM.bip32path.on("input", calcForDerivationPath);
         DOM.bip44account.on("input", calcForDerivationPath);
@@ -353,6 +355,41 @@
         calcForDerivationPath();
     }
 
+    function delayedPrivateKeyHexChanged() {
+        // Warn if there is an existing mnemonic or passphrase.
+        if (DOM.phrase.val().length > 0 || DOM.passphrase.val().length > 0) {
+            if (!confirm("This will clear existing mnemonic and passphrase")) {
+                DOM.rootKey.val(bip32RootKey);
+                return
+            }
+        }
+        hideValidationError();
+        showPending();
+        // Clear existing mnemonic and passphrase
+        DOM.phrase.val("");
+        DOM.passphrase.val("");
+        seed = null;
+        if (rootKeyChangedTimeoutEvent != null) {
+            clearTimeout(rootKeyChangedTimeoutEvent);
+        }
+        rootKeyChangedTimeoutEvent = setTimeout(privateKeyHexChanged, 400);
+    }
+
+    function privateKeyHexChanged() {
+        showPending();
+        hideValidationError();
+        var privateKeyHex = DOM.rootKeyHex.val();
+        var errorText = validateRootKeyHex(privateKeyHex);
+        if (errorText) {
+            showValidationError(errorText);
+            return;
+        }
+
+        // Calculate and display
+        calcBip32RootKeyFromSeedHex(privateKeyHex);
+        calcForDerivationPath();
+    }
+
     function litecoinUseLtubChanged() {
         litecoinUseLtub = DOM.litecoinUseLtub.prop("checked");
         if (litecoinUseLtub) {
@@ -525,6 +562,41 @@
         bip32RootKey = bitcoinjs.bitcoin.HDNode.fromBase58(rootKeyBase58, network);
     }
 
+    function calcBip32RootKeyFromSeedHex(seedHex) {
+        // try parsing with various segwit network params since this extended
+        // key may be from any one of them.
+        if (networkHasSegwit()) {
+            var n = network;
+            if ("baseNetwork" in n) {
+                n = bitcoinjs.bitcoin.networks[n.baseNetwork];
+            }
+            // try parsing using base network params
+            try {
+                bip32RootKey = bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n);
+                return;
+            }
+            catch (e) {}
+            // try parsing using p2wpkh params
+            if ("p2wpkh" in n) {
+                try {
+                    bip32RootKey = bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n.p2wpkh);
+                    return;
+                }
+                catch (e) {}
+            }
+            // try parsing using p2wpkh-in-p2sh network params
+            if ("p2wpkhInP2sh" in n) {
+                try {
+                    bip32RootKey = bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n.p2wpkhInP2sh);
+                    return;
+                }
+                catch (e) {}
+            }
+        }
+        // try the network params as currently specified
+        bip32RootKey = bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, network);
+    }
+
     function calcBip32ExtendedKey(path) {
         // Check there's a root key to derive from
         if (!bip32RootKey) {
@@ -628,6 +700,47 @@
         // try the network params as currently specified
         try {
             bitcoinjs.bitcoin.HDNode.fromBase58(rootKeyBase58, network);
+        }
+        catch (e) {
+            return "Invalid root key";
+        }
+        return "";
+    }
+
+    function validateRootKeyHex(seedHex) {
+        // try various segwit network params since this extended key may be from
+        // any one of them.
+        if (networkHasSegwit()) {
+            var n = network;
+            if ("baseNetwork" in n) {
+                n = bitcoinjs.bitcoin.networks[n.baseNetwork];
+            }
+            // try parsing using base network params
+            try {
+                bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n);
+                return "";
+            }
+            catch (e) {}
+            // try parsing using p2wpkh params
+            if ("p2wpkh" in n) {
+                try {
+                    bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n.p2wpkh);
+                    return "";
+                }
+                catch (e) {}
+            }
+            // try parsing using p2wpkh-in-p2sh network params
+            if ("p2wpkhInP2sh" in n) {
+                try {
+                    bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n.p2wpkhInP2sh);
+                    return "";
+                }
+                catch (e) {}
+            }
+        }
+        // try the network params as currently specified
+        try {
+            bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, network);
         }
         catch (e) {
             return "Invalid root key";

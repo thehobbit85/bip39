@@ -7063,6 +7063,12 @@ button.close {
                                 <textarea id="root-key" class="root-key private-data form-control" data-show-qr></textarea>
                             </div>
                         </div>
+                        <div class="form-group">
+                            <label for="private-key-hex" class="col-sm-2 control-label">Private Key Hex</label>
+                            <div class="col-sm-10">
+                                <textarea id="private-key-hex" class="private-key-hex private-data form-control" data-show-qr></textarea>
+                            </div>
+                        </div>
                         <div class="form-group litecoin-ltub-container hidden">
                             <label for="litecoin-use-ltub" class="col-sm-2 control-label">Prefixes</label>
                             <div class="col-sm-10 checkbox">
@@ -71292,6 +71298,19 @@ bitcoinjs.bitcoin.networks.testnet.p2wpkhInP2sh = {
     wif: 0xef
 };
 
+bitcoinjs.bitcoin.networks.litecoin.p2wpkh = {
+    baseNetwork: "litecoin",
+    messagePrefix: '\x19Litecoin Signed Message:\n',
+    bech32: 'ltc',
+    bip32: {
+        public: 0x04b24746,
+        private: 0x04b2430c
+    },
+    pubKeyHash: 0x30,
+    scriptHash: 0x32,
+    wif: 0xb0
+};
+
 bitcoinjs.bitcoin.networks.litecoin.p2wpkhInP2sh = {
     baseNetwork: "litecoin",
     messagePrefix: '\x19Litecoin Signed Message:\n',
@@ -106292,6 +106311,7 @@ window.Entropy = new (function() {
     DOM.generate = $(".generate");
     DOM.seed = $(".seed");
     DOM.rootKey = $(".root-key");
+    DOM.rootKeyHex = $(".private-key-hex");
     DOM.litecoinLtubContainer = $(".litecoin-ltub-container");
     DOM.litecoinUseLtub = $(".litecoin-use-ltub");
     DOM.extendedPrivKey = $(".extended-priv-key");
@@ -106374,6 +106394,7 @@ window.Entropy = new (function() {
         DOM.generate.on("click", generateClicked);
         DOM.more.on("click", showMore);
         DOM.rootKey.on("input", delayedRootKeyChanged);
+        DOM.rootKeyHex.on("input", delayedPrivateKeyHexChanged);
         DOM.litecoinUseLtub.on("change", litecoinUseLtubChanged);
         DOM.bip32path.on("input", calcForDerivationPath);
         DOM.bip44account.on("input", calcForDerivationPath);
@@ -106596,6 +106617,41 @@ window.Entropy = new (function() {
         calcForDerivationPath();
     }
 
+    function delayedPrivateKeyHexChanged() {
+        // Warn if there is an existing mnemonic or passphrase.
+        if (DOM.phrase.val().length > 0 || DOM.passphrase.val().length > 0) {
+            if (!confirm("This will clear existing mnemonic and passphrase")) {
+                DOM.rootKey.val(bip32RootKey);
+                return
+            }
+        }
+        hideValidationError();
+        showPending();
+        // Clear existing mnemonic and passphrase
+        DOM.phrase.val("");
+        DOM.passphrase.val("");
+        seed = null;
+        if (rootKeyChangedTimeoutEvent != null) {
+            clearTimeout(rootKeyChangedTimeoutEvent);
+        }
+        rootKeyChangedTimeoutEvent = setTimeout(privateKeyHexChanged, 400);
+    }
+
+    function privateKeyHexChanged() {
+        showPending();
+        hideValidationError();
+        var privateKeyHex = DOM.rootKeyHex.val();
+        var errorText = validateRootKeyHex(privateKeyHex);
+        if (errorText) {
+            showValidationError(errorText);
+            return;
+        }
+
+        // Calculate and display
+        calcBip32RootKeyFromSeedHex(privateKeyHex);
+        calcForDerivationPath();
+    }
+
     function litecoinUseLtubChanged() {
         litecoinUseLtub = DOM.litecoinUseLtub.prop("checked");
         if (litecoinUseLtub) {
@@ -106768,6 +106824,41 @@ window.Entropy = new (function() {
         bip32RootKey = bitcoinjs.bitcoin.HDNode.fromBase58(rootKeyBase58, network);
     }
 
+    function calcBip32RootKeyFromSeedHex(seedHex) {
+        // try parsing with various segwit network params since this extended
+        // key may be from any one of them.
+        if (networkHasSegwit()) {
+            var n = network;
+            if ("baseNetwork" in n) {
+                n = bitcoinjs.bitcoin.networks[n.baseNetwork];
+            }
+            // try parsing using base network params
+            try {
+                bip32RootKey = bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n);
+                return;
+            }
+            catch (e) {}
+            // try parsing using p2wpkh params
+            if ("p2wpkh" in n) {
+                try {
+                    bip32RootKey = bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n.p2wpkh);
+                    return;
+                }
+                catch (e) {}
+            }
+            // try parsing using p2wpkh-in-p2sh network params
+            if ("p2wpkhInP2sh" in n) {
+                try {
+                    bip32RootKey = bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n.p2wpkhInP2sh);
+                    return;
+                }
+                catch (e) {}
+            }
+        }
+        // try the network params as currently specified
+        bip32RootKey = bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, network);
+    }
+
     function calcBip32ExtendedKey(path) {
         // Check there's a root key to derive from
         if (!bip32RootKey) {
@@ -106871,6 +106962,47 @@ window.Entropy = new (function() {
         // try the network params as currently specified
         try {
             bitcoinjs.bitcoin.HDNode.fromBase58(rootKeyBase58, network);
+        }
+        catch (e) {
+            return "Invalid root key";
+        }
+        return "";
+    }
+
+    function validateRootKeyHex(seedHex) {
+        // try various segwit network params since this extended key may be from
+        // any one of them.
+        if (networkHasSegwit()) {
+            var n = network;
+            if ("baseNetwork" in n) {
+                n = bitcoinjs.bitcoin.networks[n.baseNetwork];
+            }
+            // try parsing using base network params
+            try {
+                bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n);
+                return "";
+            }
+            catch (e) {}
+            // try parsing using p2wpkh params
+            if ("p2wpkh" in n) {
+                try {
+                    bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n.p2wpkh);
+                    return "";
+                }
+                catch (e) {}
+            }
+            // try parsing using p2wpkh-in-p2sh network params
+            if ("p2wpkhInP2sh" in n) {
+                try {
+                    bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, n.p2wpkhInP2sh);
+                    return "";
+                }
+                catch (e) {}
+            }
+        }
+        // try the network params as currently specified
+        try {
+            bitcoinjs.bitcoin.HDNode.fromSeedHex(seedHex, network);
         }
         catch (e) {
             return "Invalid root key";
