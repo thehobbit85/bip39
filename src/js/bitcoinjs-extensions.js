@@ -1255,6 +1255,17 @@ bitcoinjs.bitcoin.networks.zencash = {
   wif: 0x80,
 };
 
+bitcoinjs.bitcoin.networks.ufo = {
+  messagePrefix: '\x18Ufo Signed Message:\n',
+  bip32: {
+    public: 0x0488b21e,
+    private: 0x0488ade4,
+  },
+  pubKeyHash: 0x1b,
+  scriptHash: 0x44,
+  wif: 0x9b,
+};
+
 bitcoinjs.bitcoin.networks.energi = {
   messagePrefix: 'DarkCoin Signed Message:\n',
   bip32: {

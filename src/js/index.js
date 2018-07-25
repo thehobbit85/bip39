@@ -98,6 +98,7 @@
     DOM.bitcoinCashAddressTypeContainer = $(".bch-addr-type-container");
     DOM.bitcoinCashAddressType = $("[name=bch-addr-type]")
     DOM.useBip38 = $(".use-bip38");
+    DOM.useUncompressed = $(".use-uncompressed");
     DOM.bip38Password = $(".bip38-password");
     DOM.addresses = $(".addresses");
     DOM.csvTab = $("#csv-tab a");
@@ -146,6 +147,7 @@
         DOM.tab.on("shown.bs.tab", tabChanged);
         DOM.hardenedAddresses.on("change", calcForDerivationPath);
         DOM.useBip38.on("change", calcForDerivationPath);
+        DOM.useUncompressed.on("change", calcForDerivationPath);
         DOM.bip38Password.on("change", calcForDerivationPath);
         DOM.indexToggle.on("click", toggleIndexes);
         DOM.addressToggle.on("click", toggleAddresses);
@@ -972,6 +974,7 @@
         this.shouldGenerate = true;
         var useHardenedAddresses = DOM.hardenedAddresses.prop("checked");
         var useBip38 = DOM.useBip38.prop("checked");
+        var useUncompressed = DOM.useUncompressed.prop("checked") || useBip38;
         var bip38password = DOM.bip38Password.val();
         var isSegwit = segwitSelected();
         var segwitAvailable = networkHasSegwit();
@@ -998,7 +1001,6 @@
                 // bip38 requires uncompressed keys
                 // see https://github.com/iancoleman/bip39/issues/140#issuecomment-352164035
                 var keyPair = key.keyPair;
-                var useUncompressed = useBip38;
                 if (useUncompressed) {
                     keyPair = new bitcoinjs.bitcoin.ECPair(keyPair.d, null, { network: network, compressed: false });
                 }
@@ -2428,6 +2430,13 @@
             },
         },
         {
+            name: "UFO - ufo",
+            onSelect: function() {
+                network = bitcoinjs.bitcoin.networks.ufo;
+                setHdCoin(202);
+            },
+        },
+        {
             name: "USC - Ultimatesecurecash",
             onSelect: function() {
                 network = bitcoinjs.bitcoin.networks.ultimatesecurecash;
@@ -2566,7 +2575,7 @@
                 network = bitcoinjs.bitcoin.networks.zencash;
                 setHdCoin(121);
             },
-        },
+        }
     ]
 
     var clients = [

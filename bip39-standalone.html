@@ -7518,7 +7518,12 @@ button.close {
                         </label>
                     </div>
                 </div>
+                
                 <div class="col-md-12">
+                    <label>
+                        <input type="checkbox" class="use-uncompressed">
+                        <span>Use uncompressed public and private keys</span>
+                    </label>
                     <div class="checkbox">
                         <label>
                             <input type="checkbox" class="use-bip38">
@@ -43311,6 +43316,17 @@ bitcoinjs.bitcoin.networks.zencash = {
   pubKeyHash: 0x2089,
   scriptHash: 0x2096,
   wif: 0x80,
+};
+
+bitcoinjs.bitcoin.networks.ufo = {
+  messagePrefix: '\x18Ufo Signed Message:\n',
+  bip32: {
+    public: 0x0488b21e,
+    private: 0x0488ade4,
+  },
+  pubKeyHash: 0x1b,
+  scriptHash: 0x44,
+  wif: 0x9b,
 };
 
 bitcoinjs.bitcoin.networks.energi = {
@@ -106360,6 +106376,7 @@ window.Entropy = new (function() {
     DOM.bitcoinCashAddressTypeContainer = $(".bch-addr-type-container");
     DOM.bitcoinCashAddressType = $("[name=bch-addr-type]")
     DOM.useBip38 = $(".use-bip38");
+    DOM.useUncompressed = $(".use-uncompressed");
     DOM.bip38Password = $(".bip38-password");
     DOM.addresses = $(".addresses");
     DOM.csvTab = $("#csv-tab a");
@@ -106408,6 +106425,7 @@ window.Entropy = new (function() {
         DOM.tab.on("shown.bs.tab", tabChanged);
         DOM.hardenedAddresses.on("change", calcForDerivationPath);
         DOM.useBip38.on("change", calcForDerivationPath);
+        DOM.useUncompressed.on("change", calcForDerivationPath);
         DOM.bip38Password.on("change", calcForDerivationPath);
         DOM.indexToggle.on("click", toggleIndexes);
         DOM.addressToggle.on("click", toggleAddresses);
@@ -107234,6 +107252,7 @@ window.Entropy = new (function() {
         this.shouldGenerate = true;
         var useHardenedAddresses = DOM.hardenedAddresses.prop("checked");
         var useBip38 = DOM.useBip38.prop("checked");
+        var useUncompressed = DOM.useUncompressed.prop("checked") || useBip38;
         var bip38password = DOM.bip38Password.val();
         var isSegwit = segwitSelected();
         var segwitAvailable = networkHasSegwit();
@@ -107260,7 +107279,6 @@ window.Entropy = new (function() {
                 // bip38 requires uncompressed keys
                 // see https://github.com/iancoleman/bip39/issues/140#issuecomment-352164035
                 var keyPair = key.keyPair;
-                var useUncompressed = useBip38;
                 if (useUncompressed) {
                     keyPair = new bitcoinjs.bitcoin.ECPair(keyPair.d, null, { network: network, compressed: false });
                 }
@@ -108690,6 +108708,13 @@ window.Entropy = new (function() {
             },
         },
         {
+            name: "UFO - ufo",
+            onSelect: function() {
+                network = bitcoinjs.bitcoin.networks.ufo;
+                setHdCoin(202);
+            },
+        },
+        {
             name: "USC - Ultimatesecurecash",
             onSelect: function() {
                 network = bitcoinjs.bitcoin.networks.ultimatesecurecash;
@@ -108828,7 +108853,7 @@ window.Entropy = new (function() {
                 network = bitcoinjs.bitcoin.networks.zencash;
                 setHdCoin(121);
             },
-        },
+        }
     ]
 
     var clients = [
